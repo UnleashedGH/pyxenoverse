@@ -1,3 +1,5 @@
+import os
+
 from recordclass import recordclass
 import struct
 
@@ -21,6 +23,7 @@ class BDM:
         self.header = None
         self.endian = endian
         self.entries = []
+        self.has_comments = False
         self.type = Type0
         self.filename = ''
 
@@ -41,6 +44,47 @@ class BDM:
         with open(self.filename, 'wb') as f:
             f.write(BDM_SIGNATURE)
             self.write(f, '<')
+
+
+    def loadComment(self, filename):
+        #comment
+
+        filename = filename[0:-4]
+        filename = filename + "_BDM.cmnt"
+
+        if not os.path.exists(filename):
+            #print("does not exists")
+            return
+
+        print(self.entries)
+        try:
+            with open(filename, 'r') as f:
+                comments = f.readlines()
+                self.has_comments = True
+                if self.entries:
+                    for i, entry in enumerate(self.entries):
+                        entry.setComment(comments[i])
+        except:
+            print("failed to load comment data, file might be empty or incorrectly formatted")
+            return
+
+
+
+    def saveComment(self, fileName=None):
+        if not self.has_comments:
+            return
+        fileName = fileName[0:-4]
+        fileName = fileName + "_BDM.cmnt"
+        cmnt_list = []
+        try:
+            with open(fileName, 'w') as f:
+                for entry in self.entries:
+
+                    cmnt_list.append(entry.getComment() + "\n")
+                f.writelines(cmnt_list)
+        except:
+            print("failed to save comment data")
+            return
 
     def read(self, f, endian):
         # header

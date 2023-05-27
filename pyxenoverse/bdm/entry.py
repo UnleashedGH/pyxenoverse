@@ -13,6 +13,7 @@ class Entry(BaseRecord):
         self.sub_entries = []
         self.sub_entry_type = sub_entry_type
         self.data = BDMEntry(entry_id)
+        self.comment = ""
         for i in range(10):
             self.sub_entries.append(self.sub_entry_type())
 
@@ -28,6 +29,22 @@ class Entry(BaseRecord):
         f.write(struct.pack(endian + 'I', *self.data))
         for sub_entry in self.sub_entries:
             sub_entry.write(f, endian)
+
+    def setComment(self, cmnt):
+        self.comment = cmnt.rstrip()
+
+    def getDisplayComment(self):
+        if self.comment != "" and self.comment != "\n":
+            #print("yes, its NOT empty......")
+            return f" - {self.comment}"
+        else:
+            return ""
+    def getComment(self):
+        if self.comment != "":
+            #print("yes, its NOT empty......")
+            return self.comment
+        else:
+            return ""
 
     def convert_type1_to_type0(self, type1):
         self.id = type1.id

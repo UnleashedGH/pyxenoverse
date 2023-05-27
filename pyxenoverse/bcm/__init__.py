@@ -1,5 +1,8 @@
+import os
+
 from recordclass import recordclass
 import struct
+from pyxenoverse import BaseRecord
 
 BCM_SIGNATURE = b'#BCM'
 BCMHeader = recordclass('BCMHeader', [
@@ -54,12 +57,38 @@ BCM_ENTRY_SIZE = 112
 BCM_ENTRY_BYTE_ORDER = 'IIIIIhhIIHHHHHHHHIIIIIIIIIIIIfh' \
                        'hHHI'
 
+class Entry(BaseRecord):
+    def __init__(self, bcm, index):
+        super().__init__()
+        self.bcm = bcm
+        self.data = BCMEntry(*([0] * len(BCMEntry.__fields__)))
+        self.comment = ""
+
+    def read(self, f, endian, address):
+        bytes_read = [address] + list(struct.unpack(endian + BCM_ENTRY_BYTE_ORDER, f.read(BCM_ENTRY_SIZE)))
+        self.data= BCMEntry(*bytes_read)
+
+    def setComment(self, cmnt):
+        self.comment = cmnt.rstrip()
+
+    def getDisplayComment(self):
+        if self.comment != "" and self.comment != "\n":
+            return f" - {self.comment}"
+        else:
+            return ""
+    def getComment(self):
+        if self.comment != "":
+            return self.comment
+        else:
+            return ""
+
 
 class BCM:
     def __init__(self, endian='<'):
         self.header = None
         self.endian = endian
         self.entries = []
+        self.has_comments = False
         self.filename = ''
 
     def load(self, filename):
@@ -80,6 +109,51 @@ class BCM:
             f.write(BCM_SIGNATURE)
             self.write(f, '<')
 
+    def loadComment(self, filename):
+        #comment
+
+        filename = filename[0:-4]
+        filename = filename + "_BCM.cmnt"
+
+
+        if not os.path.exists(filename):
+            #print("does not exists")
+            return
+
+        print(self.entries)
+        try:
+
+            with open(filename, 'r') as f:
+                comments = f.readlines()
+                self.has_comments = True
+                if self.entries:
+                    for i, entry in enumerate(self.entries):
+
+                        entry.setComment(comments[i])
+        except:
+            print("failed to load comment data, file might be empty or incorrectly formatted")
+            return
+
+
+
+    def saveComment(self, fileName=None):
+        if not self.has_comments:
+            return
+        fileName = fileName[0:-4]
+        fileName = fileName + "_BCM.cmnt"
+        cmnt_list = []
+        try:
+            with open(fileName, 'w') as f:
+                for entry in self.entries:
+
+                    cmnt_list.append(entry.getComment() + "\n")
+                f.writelines(cmnt_list)
+        except:
+            print("failed to save comment data")
+            return
+
+
+
     def read(self, f, endian):
         # Header
         self.header = BCMHeader(*struct.unpack(endian + BCM_HEADER_BYTE_ORDER, f.read(BCM_HEADER_SIZE)))
@@ -87,8 +161,10 @@ class BCM:
         self.entries.clear()
         for idx in range(self.header.num_entries):
             address = f.tell() if idx != 0 else 0
-            bytes_read = [address] + list(struct.unpack(endian + BCM_ENTRY_BYTE_ORDER, f.read(BCM_ENTRY_SIZE)))
-            entry = BCMEntry(*bytes_read)
+
+            entry = Entry(self, idx)
+            entry.read(f, endian, address)
+            #entry = BCMEntry(*bytes_read)
             self.entries.append(entry)
 
     def write(self, f, endian):
@@ -98,7 +174,8 @@ class BCM:
         f.seek(self.header.data_start)
         for idx, entry in enumerate(self.entries):
             f.seek(entry.address if idx != 0 else self.header.data_start)
-            f.write(struct.pack(endian + BCM_ENTRY_BYTE_ORDER, *entry[1:]))
+            f.write(struct.pack(endian + BCM_ENTRY_BYTE_ORDER, *entry.data[1:]))
+
 
 
 def index_to_address(index):
@@ -111,3 +188,7 @@ def address_to_index(address):
     if not address:
         return 0
     return int((address - (BCM_HEADER_SIZE + 4)) / BCM_ENTRY_SIZE)
+
+
+
+
